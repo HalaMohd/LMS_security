@@ -11,5 +11,5 @@ urlpatterns = [
     path('return/', views.return_page),
     path('my-borrows/', views.my_borrows_page),
     path('profile/', views.profile_page),
-    path('security/', views.security_page)
+    path('security/', views.security_page),
 ]

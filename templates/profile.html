@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Profile — LMS{% endblock %}
+{% block content %}
+<div class="card" style="max-width:520px;">
+  <h1>My Profile</h1>
+
+  <div style="display:flex; align-items:center; gap:1rem; margin-bottom:1.5rem;">
+    <div style="width:56px; height:56px; border-radius:50%; background:#4a6cf7;
+                display:flex; align-items:center; justify-content:center;
+                color:#fff; font-size:1.4rem; font-weight:600;">
+      {{ user.username|first|upper }}
+    </div>
+    <div>
+      <div style="font-size:1.1rem; font-weight:600;">{{ user.username }}</div>
+      <div style="font-size:0.85rem; color:#777;">
+        {% if user.role == 'admin' %}
+          🔴 Admin
+        {% elif user.role == 'librarian' %}
+          🟡 Librarian
+        {% else %}
+          🟢 Student
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <table>
+    <tr><th>Username</th><td>{{ user.username }}</td></tr>
+    <tr><th>Role</th><td>{{ user.role|capfirst }}</td></tr>
+    <tr><th>Email</th><td>{{ user.email|default:"—" }}</td></tr>
+    <tr><th>Joined</th><td>{{ user.date_joined|date:"M d, Y" }}</td></tr>
+    <tr><th>Staff access</th><td>{% if user.is_staff %}Yes{% else %}No{% endif %}</td></tr>
+  </table>
+
+  <div style="margin-top:1.5rem;">
+    <a href="/my-borrows/" class="btn btn-primary">My Borrows</a>
+    <a href="/logout/" class="btn btn-danger" style="margin-left:0.75rem;">Logout</a>
+  </div>
+</div>
+
+{% if user.role == 'admin' or user.role == 'librarian' %}
+<div class="card" style="max-width:520px;">
+  <h2>🛡️ Attack Logs</h2>
+  <table>
+    <thead>
+      <tr><th>IP Address</th><th>Attack Type</th><th>Time</th></tr>
+    </thead>
+    <tbody>
+      {% for log in attack_logs %}
+      <tr>
+        <td>{{ log.ip_address }}</td>
+        <td>
+          {% if log.attack_type == "SQL Injection" %}
+            <span class="badge badge-red">SQL Injection</span>
+          {% elif log.attack_type == "XSS" %}
+            <span class="badge badge-red">XSS</span>
+          {% elif log.attack_type == "DoS" %}
+            <span class="badge badge-red">DoS</span>
+          {% else %}
+            <span class="badge badge-gray">{{ log.attack_type }}</span>
+          {% endif %}
+        </td>
+        <td>{{ log.timestamp|date:"M d, Y H:i" }}</td>
+      </tr>
+      {% empty %}
+        <tr><td colspan="3" style="color:#aaa; text-align:center;">No attacks logged yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}

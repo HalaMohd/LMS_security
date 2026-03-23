@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% block title %}Security Dashboard — LMS{% endblock %}
+{% block content %}
+
+<div class="card">
+  <h1>🛡️ Security Dashboard</h1>
+  <p style="color:#555;">Live security monitoring and feature overview for the LMS system.</p>
+</div>
+
+<!-- Attack stats -->
+<div style="display:grid; grid-template-columns:repeat(4,1fr); gap:1rem; margin-bottom:1rem;">
+  <div class="card" style="text-align:center; padding:1.2rem;">
+    <div style="font-size:2rem; font-weight:700; color:#1a1a2e;">{{ stats.total }}</div>
+    <div style="font-size:0.85rem; color:#777; margin-top:0.25rem;">Total Attacks</div>
+  </div>
+  <div class="card" style="text-align:center; padding:1.2rem;">
+    <div style="font-size:2rem; font-weight:700; color:#e74c3c;">{{ stats.sql }}</div>
+    <div style="font-size:0.85rem; color:#777; margin-top:0.25rem;">SQL Injections</div>
+  </div>
+  <div class="card" style="text-align:center; padding:1.2rem;">
+    <div style="font-size:2rem; font-weight:700; color:#e67e22;">{{ stats.xss }}</div>
+    <div style="font-size:0.85rem; color:#777; margin-top:0.25rem;">XSS Attempts</div>
+  </div>
+  <div class="card" style="text-align:center; padding:1.2rem;">
+    <div style="font-size:2rem; font-weight:700; color:#8e44ad;">{{ stats.dos }}</div>
+    <div style="font-size:0.85rem; color:#777; margin-top:0.25rem;">DoS Attempts</div>
+  </div>
+</div>
+
+<!-- Live attack log -->
+<div class="card">
+  <h2>📋 Live Attack Log</h2>
+  <table>
+    <thead>
+      <tr><th>IP Address</th><th>Attack Type</th><th>Time</th></tr>
+    </thead>
+    <tbody>
+      {% for log in attack_logs %}
+      <tr>
+        <td><code>{{ log.ip_address }}</code></td>
+        <td>
+          {% if log.attack_type == "SQL Injection" %}
+            <span class="badge badge-red">SQL Injection</span>
+          {% elif log.attack_type == "XSS" %}
+            <span class="badge badge-red">XSS</span>
+          {% elif log.attack_type == "DoS" %}
+            <span class="badge badge-red">DoS</span>
+          {% else %}
+            <span class="badge badge-gray">{{ log.attack_type }}</span>
+          {% endif %}
+        </td>
+        <td>{{ log.timestamp|date:"M d, Y — H:i:s" }}</td>
+      </tr>
+      {% empty %}
+        <tr>
+          <td colspan="3" style="color:#aaa; text-align:center;">
+            No attacks logged yet. Try testing from the login page.
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<!-- Security features -->
+<div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
+  <div class="card">
+    <h2>🌐 Frontend Security</h2>
+    <ul style="color:#555; font-size:0.92rem; line-height:2;">
+      <li>✅ CSRF tokens on every form</li>
+      <li>✅ XSS detection shown to user in real time</li>
+      <li>✅ SQL Injection attempts blocked and logged</li>
+      <li>✅ Role-based UI (Student / Librarian / Admin)</li>
+      <li>✅ Login required for sensitive pages</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h2>⚙️ Backend Security</h2>
+    <ul style="color:#555; font-size:0.92rem; line-height:2;">
+      <li>✅ JWT authentication (access + refresh tokens)</li>
+      <li>✅ Django session-based auth for HTML pages</li>
+      <li>✅ Password hashing via PBKDF2-SHA256</li>
+      <li>✅ Rate limiting using Django cache</li>
+      <li>✅ Attack logging to database</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h2>🗄️ Database Security</h2>
+    <ul style="color:#555; font-size:0.92rem; line-height:2;">
+      <li>✅ Django ORM prevents raw SQL injection</li>
+      <li>✅ Migrations for schema version control</li>
+      <li>✅ ForeignKey constraints enforced</li>
+      <li>✅ Passwords never stored in plaintext</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h2>🚀 DevOps Security</h2>
+    <ul style="color:#555; font-size:0.92rem; line-height:2;">
+      <li>✅ SECRET_KEY loaded from environment variable</li>
+      <li>✅ DEBUG flag controlled by environment</li>
+      <li>✅ ALLOWED_HOSTS configurable</li>
+      <li>✅ XFrameOptions middleware (clickjacking)</li>
+      <li>✅ Django security middleware stack</li>
+    </ul>
+  </div>
+</div>
+
+<!-- Live test guide -->
+<div class="card">
+  <h2>🧪 Test Attack Detection</h2>
+  <p style="color:#555; margin-bottom:1rem; font-size:0.92rem;">
+    Go to the <a href="/login/">Login page</a> and type these into the username field:
+  </p>
+  <table>
+    <thead>
+      <tr><th>Attack Type</th><th>Test Input</th><th>Expected Result</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="badge badge-red">SQL Injection</span></td>
+        <td><code>' OR 1=1--</code></td>
+        <td>Blocked + logged above</td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-red">XSS</span></td>
+        <td><code>&lt;script&gt;alert(1)&lt;/script&gt;</code></td>
+        <td>Blocked + logged above</td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-red">DoS</span></td>
+        <td>Submit form 20+ times fast</td>
+        <td>Rate limited + logged above</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+{% endblock %}

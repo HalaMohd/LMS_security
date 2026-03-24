@@ -97,43 +97,7 @@ def register_view(request):
         "message": "User created successfully",
         "username": user.username
     })
-""" 
-@csrf_exempt
-def register_view(request):
-    if request.method != "POST":
-        return JsonResponse({"error": "Only POST method allowed"}, status=405)
 
-    attack = detect_attack(request)
-    if attack:
-        return JsonResponse({"error": attack}, status=403)
-
-    # FIX: safe JSON parsing
-    try:
-        data = json.loads(request.body)
-    except json.JSONDecodeError:
-        return JsonResponse({"error": "Invalid JSON"}, status=400)
-
-    username = data.get("username", "").strip()
-    password = data.get("password", "")
-    email = data.get("email", "").strip()
-    requested_role = data.get("role")
-
-    if requested_role and requested_role != "student":
-        return JsonResponse(
-            {"error": "Public registration can only create student accounts"},
-            status=403
-        )
-
-    user = CustomUser.objects.create_user(
-        username=username,
-        password=password,
-        email=email,
-        role="student"
-    )
-
-    return JsonResponse({"message": "User created successfully", "username": user.username})
-
- """
 
 @csrf_exempt
 def login_view(request):
@@ -328,7 +292,10 @@ def login_page(request):
 
     if request.method == 'POST':
         # Run attack detection on the raw POST body
-        body = request.body.decode('utf-8', errors='ignore').lower()
+        username_input = request.POST.get('username', '')
+        password_input = request.POST.get('password', '')
+        inspect_text = f"{username_input} {password_input}".lower()
+
         ip = request.META.get('REMOTE_ADDR', '0.0.0.0')
         import time
         from django.core.cache import cache
@@ -340,6 +307,7 @@ def login_page(request):
         timestamps.append(current_time)
         cache.set(cache_key, timestamps, timeout=120)
 
+
         sql_patterns = ["' or 1=1", "union select", "drop table", "--", "'; drop", "1=1--"]
         xss_patterns = ["<script>", "</script>", "javascript:", "onerror=", "onload="]
 
@@ -348,13 +316,14 @@ def login_page(request):
             attack_warning = "⚠️ DoS Attack Detected — Too many requests from your IP."
         else:
             for pattern in sql_patterns:
-                if pattern in body:
+                if pattern in inspect_text:
                     AttackLog.objects.create(ip_address=ip, attack_type="SQL Injection")
                     attack_warning = "🛡️ SQL Injection Attempt Detected and Blocked."
                     break
+
             if not attack_warning:
                 for pattern in xss_patterns:
-                    if pattern in body:
+                    if pattern in inspect_text:
                         AttackLog.objects.create(ip_address=ip, attack_type="XSS")
                         attack_warning = "🛡️ XSS Attack Attempt Detected and Blocked."
                         break

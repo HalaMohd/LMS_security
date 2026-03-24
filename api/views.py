@@ -11,24 +11,21 @@ from django.shortcuts import render, redirect
 from django.contrib.auth import login, logout
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-
-# In-memory rate limit tracker (per process)
-request_logs = {}
+from django.core.cache import cache
+import time
 
 def detect_attack(request):
-    body = request.body.decode('utf-8', errors='ignore')
-    ip = request.META.get('REMOTE_ADDR')
+    body = request.body.decode('utf-8', errors='ignore').lower()
+    ip = request.META.get('REMOTE_ADDR', '0.0.0.0')
     current_time = time.time()
 
-    if ip not in request_logs:
-        request_logs[ip] = []
+    cache_key = f"api_ratelimit_{ip}"
+    timestamps = cache.get(cache_key, [])
+    timestamps = [t for t in timestamps if current_time - t < 10]
+    timestamps.append(current_time)
+    cache.set(cache_key, timestamps, timeout=20)
 
-    request_logs[ip].append(current_time)
-    # Keep only requests from the last 10 seconds
-    request_logs[ip] = [t for t in request_logs[ip] if current_time - t < 10]
-
-    # FIX: raised threshold from 2 to 20
-    if len(request_logs[ip]) > 20:
+    if len(timestamps) > 20:
         AttackLog.objects.create(ip_address=ip, attack_type="DoS")
         return "Too many requests (DoS detected)"
 
@@ -36,22 +33,71 @@ def detect_attack(request):
     xss_patterns = ["<script>", "</script>", "javascript:", "onerror=", "onload="]
 
     for pattern in sql_patterns:
-        if pattern in body.lower():
+        if pattern in body:
             AttackLog.objects.create(ip_address=ip, attack_type="SQL Injection")
             return "SQL Injection detected"
 
     for pattern in xss_patterns:
-        if pattern in body.lower():
+        if pattern in body:
             AttackLog.objects.create(ip_address=ip, attack_type="XSS")
             return "XSS attack detected"
 
     return None
 
 
+
 def test_view(request):
     return JsonResponse({"message": "API is working"})
 
+@csrf_exempt
+def register_view(request):
+    if request.method != "POST":
+        return JsonResponse({"error": "Only POST method allowed"}, status=405)
 
+    attack = detect_attack(request)
+    if attack:
+        return JsonResponse({"error": attack}, status=403)
+
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+    username = data.get("username", "").strip()
+    password = data.get("password", "")
+    email = data.get("email", "").strip()
+    requested_role = data.get("role")
+
+    if requested_role and requested_role != "student":
+        return JsonResponse(
+            {"error": "Public registration can only create student accounts"},
+            status=403
+        )
+
+    if not username or len(username) < 3:
+        return JsonResponse({"error": "Username must be at least 3 characters"}, status=400)
+
+    if not password or len(password) < 8:
+        return JsonResponse({"error": "Password must be at least 8 characters"}, status=400)
+
+    if CustomUser.objects.filter(username=username).exists():
+        return JsonResponse({"error": "Username already taken"}, status=400)
+
+    try:
+        user = CustomUser.objects.create_user(
+            username=username,
+            password=password,
+            email=email,
+            role="student"
+        )
+    except Exception:
+        return JsonResponse({"error": "Could not create account"}, status=400)
+
+    return JsonResponse({
+        "message": "User created successfully",
+        "username": user.username
+    })
+""" 
 @csrf_exempt
 def register_view(request):
     if request.method != "POST":
@@ -70,28 +116,24 @@ def register_view(request):
     username = data.get("username", "").strip()
     password = data.get("password", "")
     email = data.get("email", "").strip()
-    role = data.get("role", "student")  # 'student', 'librarian', 'admin'
+    requested_role = data.get("role")
 
-    # FIX: input validation
-    if not username or len(username) < 3:
-        return JsonResponse({"error": "Username must be at least 3 characters"}, status=400)
-    if not password or len(password) < 8:
-        return JsonResponse({"error": "Password must be at least 8 characters"}, status=400)
-    if role not in ["student", "librarian", "admin"]:
-        return JsonResponse({"error": "Invalid role"}, status=400)
-
-    if CustomUser.objects.filter(username=username).exists():
-        return JsonResponse({"error": "User already exists"}, status=400)
+    if requested_role and requested_role != "student":
+        return JsonResponse(
+            {"error": "Public registration can only create student accounts"},
+            status=403
+        )
 
     user = CustomUser.objects.create_user(
         username=username,
         password=password,
         email=email,
-        role=role
+        role="student"
     )
 
     return JsonResponse({"message": "User created successfully", "username": user.username})
 
+ """
 
 @csrf_exempt
 def login_view(request):
@@ -142,7 +184,7 @@ def borrow_book(request):
     """Allow a student to borrow an available book."""
     user = request.user
 
-    if user.role not in ["student", "admin"]:
+    if user.role != "student":
         return JsonResponse({"error": "Only students can borrow books"}, status=403)
 
     try:
@@ -233,30 +275,49 @@ def home_view(request):
 def register_page(request):
     if request.user.is_authenticated:
         return redirect('/')
+
     if request.method == 'POST':
         username = request.POST.get('username', '').strip()
         password = request.POST.get('password', '')
         password2 = request.POST.get('password2', '')
-        role = request.POST.get('role', 'student')
+
+        # validation
+        if not username:
+            messages.error(request, 'Username is required.')
+            return redirect('/register/')
+
+        if len(username) < 3:
+            messages.error(request, 'Username must be at least 3 characters.')
+            return redirect('/register/')
 
         if password != password2:
             messages.error(request, 'Passwords do not match.')
             return redirect('/register/')
+
         if len(password) < 8:
             messages.error(request, 'Password must be at least 8 characters.')
             return redirect('/register/')
+
         if CustomUser.objects.filter(username=username).exists():
             messages.error(request, 'Username already taken.')
             return redirect('/register/')
 
-        user = CustomUser.objects.create_user(
-            username=username, password=password, role=role
-        )
+        try:
+            user = CustomUser.objects.create_user(
+                username=username,
+                password=password,
+                role="student"
+            )
+        except Exception:
+            messages.error(request, 'Could not create account. Please try again.')
+            return redirect('/register/')
+
         login(request, user)
-        messages.success(request, f'Welcome, {username}! Logged in as {role}.')
+        messages.success(request, f'Welcome, {username}! Your student account was created.')
         return redirect('/')
 
     return render(request, 'register.html')
+
 
 
 def login_page(request):
@@ -327,6 +388,10 @@ def books_page(request):
 
 @login_required(login_url='/login/')
 def borrow_page(request):
+    if request.user.role != "student":
+        messages.error(request, "Only students can borrow books.")
+        return redirect('/books/')
+    
     if request.method == 'POST':
         book_id = request.POST.get('book_id')
         try:

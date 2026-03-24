@@ -16,7 +16,7 @@ jobs:
         env:
           POSTGRES_DB: lms_db
           POSTGRES_USER: lms_user
-          POSTGRES_PASSWORD: lms_password
+          POSTGRES_PASSWORD: ${{ secrets.DB_PASSWORD }}
         ports:
           - 5432:5432
         options: >-
@@ -25,13 +25,14 @@ jobs:
           --health-timeout=5s
           --health-retries=5
 
+
     env:
-      SECRET_KEY: django-insecure-ci-key
-      DEBUG: "True"
+      SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
+      DEBUG: "False"
       ALLOWED_HOSTS: 127.0.0.1,localhost
       DB_NAME: lms_db
       DB_USER: lms_user
-      DB_PASSWORD: lms_password
+      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
       DB_HOST: 127.0.0.1
       DB_PORT: 5432
 
